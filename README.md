@@ -7,7 +7,7 @@
 - 数据采集：akshare、tushare、requests、APScheduler
 - 数据处理：pandas、numpy
 - 数据存储：Redis、ClickHouse、MongoDB
-- API服务：FastAPI、WebSocket
+- API服务：FastAPI、WebSocket、uvicorn
 - 监控运维：Prometheus、Grafana、loguru
 - 权限管理：RBAC模型
 
@@ -96,3 +96,20 @@ stock-fund-data-platform/
 ### 6. 用户权限与安全管理模块
 - 多租户数据隔离：支持机构级、部门级、个人用户多级数据隔离与访问控制。
 - 精细化权限管理：实现功能权限（查询、导出、管理等）、数据权限（字段级、行级控制）、时间权限（历史数据访问时限）三维管控；配置接口调用与数据导出用量配额管理，保障数据安全合规。
+
+## 快速开始
+
+### 1.安装依赖
+- pip install -r requirements.txt
+
+### 2.配置环境
+- 复制 config/settings.example.py 为config/settings.py，修改数据库连接、API密钥等配置项
+
+### 3.启动数据采集调度
+- python src/crawler/scheduler.py
+
+### 4.启动项目服务
+- uvicorn src.api.rest_api:app --host 0.0.0.0 --port 8000
+
+## License
+本项目采用MIT License开源协议
