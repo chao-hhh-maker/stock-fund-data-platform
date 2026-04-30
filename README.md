@@ -12,43 +12,44 @@
 - 权限管理：RBAC模型、JWT认证
 
 ## 📂 项目结构
+```text
 stock-fund-data-platform/
-├── README.md                # 项目说明文档
-├── requirements.txt         # 依赖包列表
-├── .gitignore               # Git忽略文件配置
-├── config/                  # 配置文件目录
-│   ├── settings.py          # 全局配置（数据库、API密钥等）
-│   ├── scheduler.yaml       # 采集调度配置
-│   └── permissions.yaml     # 权限控制配置
-├── src/                     # 核心代码目录
-│   ├── crawler/             # 数据采集模块
-│   │   ├── providers/       # 多数据源接入
+├── README.md              # 项目说明文档
+├── requirements.txt       # 依赖包列表
+├── .gitignore             # Git忽略文件配置
+├── config/                # 配置文件目录
+│   ├── settings.py        # 全局配置（数据库、API密钥等）
+│   ├── scheduler.yaml     # 采集调度配置
+│   └── permissions.yaml   # 权限控制配置
+├── src/                   # 核心代码目录
+│   ├── crawler/           # 数据采集模块
+│   │   ├── providers/    # 多数据源接入
 │   │   │   ├── wind_api.py
 │   │   │   ├── eastmoney_api.py
 │   │   │   ├── akshare_api.py
 │   │   │   └── tushare_api.py
-│   │   ├── scheduler.py     # 采集任务调度
-│   │   └── monitor.py       # 采集任务监控与告警
-│   ├── cleaner/             # 数据清洗与标准化模块
+│   │   ├── scheduler.py   # 采集任务调度
+│   │   └── monitor.py     # 采集任务监控与告警
+│   ├── cleaner/           # 数据清洗与标准化模块
 │   │   ├── missing_handler.py  # 缺失值处理
 │   │   ├── anomaly_handler.py  # 异常值处理
 │   │   ├── validator.py     # 数据一致性校验
 │   │   └── standardizer.py  # 数据标准化（代码映射、行业分类等）
-│   ├── storage/             # 数据存储模块
+│   ├── storage/           # 数据存储模块
 │   │   ├── redis_store.py   # 实时数据缓存
 │   │   ├── clickhouse_store.py # 历史数据列式存储
 │   │   ├── mongo_store.py   # 文档型数据存储
 │   │   └── metadata.py      # 元数据管理
-│   ├── api/                 # 查询与API服务模块
+│   ├── api/               # 查询与API服务模块
 │   │   ├── sql_interface.py # SQL查询接口
 │   │   ├── rest_api.py      # RESTful API服务
 │   │   ├── websocket.py     # WebSocket实时推送
 │   │   └── exporter.py      # 数据导出功能
-│   ├── monitor_ops/         # 监控与运维模块
+│   ├── monitor_ops/       # 监控与运维模块
 │   │   ├── data_monitor.py  # 数据完整性监控
 │   │   ├── system_monitor.py # 系统健康监控
 │   │   └── alert.py         # 告警通知
-│   └── auth/                # 用户权限与安全模块
+│   └── auth/              # 用户权限与安全模块
 │       ├── rbac.py          # 基于角色的权限控制
 │       ├── quota.py         # 用量配额管理
 │       └── audit.py         # 操作审计日志
