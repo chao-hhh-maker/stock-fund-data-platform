@@ -271,7 +271,7 @@
    - install.md
    - user_guid.md
 2. ai.md 必须写清楚：提示词、AI 输出、你怎么改、为什么改。
-3. assign.md 即使你一个人，也要记录每天做了什么。
+3. assign.md 要记录每天做了什么。
 4. install.md 必须让别人按步骤能启动成功。
 
 完成标准：
