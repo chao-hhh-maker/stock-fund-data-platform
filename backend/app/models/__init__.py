@@ -7,5 +7,6 @@ from app.models.crawl import CrawlJob, CrawlRun
 from app.models.stock_daily import StockDaily
 from app.models.fund_nav import FundNav
 from app.models.instrument import Instrument
+from app.models.export import ExportRecord
 
-__all__ = ["User", "Role", "CrawlJob", "CrawlRun", "StockDaily", "FundNav", "Instrument"]
+__all__ = ["User", "Role", "CrawlJob", "CrawlRun", "StockDaily", "FundNav", "Instrument", "ExportRecord"]
