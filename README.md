@@ -202,19 +202,76 @@ stock-fund-data-platform/
     - 控制时间权限，限制历史数据的访问时限。
     - 进行用量配额管理，合理分配资源使用。 
 
-## 快速开始
+## 📊 当前开发进度
 
-### 1.安装依赖
-- pip install -r requirements.txt
+本项目正在按照[建设指南](construction-guide.md)逐步开发中。
 
-### 2.配置环境
-- 复制 config/settings.example.py 为config/settings.py，修改数据库连接、API密钥等配置项
+**已完成步骤**:
+- ✅ 第一步: 范围确定 (项目边界、MVP功能定义)
+- ✅ 第二步: 工程骨架搭建 (前后端目录结构、依赖安装)
+- ✅ 第三步: 数据库设计 (核心表结构设计、初始化脚本)
 
-### 3.启动数据采集调度
-- python src/crawler/scheduler.py
+**下一步**: 第四步 - 后端认证与基础接口开发
 
-### 4.启动项目服务
-- uvicorn src.api.rest_api:app --host 0.0.0.0 --port 8000
+---
+
+## 🚀 快速开始
+
+### 前置要求
+
+- Python 3.10+
+- Node.js 16+
+- MySQL 8.0+
+
+### 1. 数据库设置
+
+详细步骤请参考 [数据库设置指南](docs/database_setup.md)
+
+简要步骤:
+```bash
+# 创建数据库
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS stock_fund_platform DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+# 执行初始化脚本
+mysql -u root -p stock_fund_platform < sql/init.sql
+
+# 验证数据库
+python scripts/verify_db.py
+```
+
+### 2. 后端环境
+
+```bash
+cd backend
+
+# 激活虚拟环境
+.venv\Scripts\Activate.ps1  # Windows PowerShell
+# 或
+source .venv/bin/activate   # Linux/Mac
+
+# 启动后端服务
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+访问 API 文档: http://localhost:8000/docs
+
+### 3. 前端环境
+
+```bash
+cd frontend
+
+# 启动前端开发服务器
+npm run dev
+```
+
+访问前端页面: http://localhost:5173
+
+### 默认账户
+
+- 用户名: `admin`
+- 密码: `admin123`
+
+⚠️ **重要**: 首次登录后请立即修改默认密码!
 
 ## License
 本项目采用MIT License开源协议
