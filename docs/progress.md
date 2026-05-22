@@ -1,6 +1,6 @@
 # 项目开发进度
 
-## 整体进度: 45% (5/11 步骤完成)
+## 整体进度: 55% (6/11 步骤完成)
 
 ---
 
@@ -235,6 +235,70 @@
 - 批量采集时单个失败不影响其他
 - 完整的事务管理和异常处理
 - 详细的日志记录便于调试
+
+---
+
+## ✅ 已完成步骤
+
+### 第六步: 任务管理系统
+**完成时间**: 2026-05-22
+**工作量**: 约 8 小时
+
+**完成内容**:
+- [x] 集成 APScheduler 定时任务调度器
+  - 创建 TaskScheduler 管理器
+  - 支持 CRON 表达式配置
+  - 后台运行，不阻塞主线程
+- [x] 实现任务相关接口完善
+  - POST /api/tasks/crawl/stock - 手动触发股票采集
+  - POST /api/tasks/crawl/fund - 手动触发基金采集
+  - POST /api/tasks/create - 创建定时任务
+  - POST /api/tasks/{task_id}/enable - 启用任务
+  - POST /api/tasks/{task_id}/disable - 停用任务
+  - GET /api/tasks - 任务列表
+  - GET /api/tasks/{task_id} - 任务详情
+  - GET /api/tasks/{task_id}/logs - 执行日志
+- [x] 系统启动时加载已启用任务
+  - lifespan 事件中自动加载
+  - 从数据库查询 is_enabled=1 的任务
+  - 自动注册到调度器
+- [x] 系统关闭时安全退出调度器
+  - lifespan 事件中优雅关闭
+  - 等待当前任务完成
+  - 释放资源
+- [x] 任务执行前后写日志
+  - 事件监听器记录执行结果
+  - 成功/失败状态更新
+  - 详细的错误信息记录
+- [x] 任务启用/停用开关
+  - 数据库 is_enabled 字段控制
+  - API 接口动态启用/停用
+  - 避免调试期误触发
+- [x] 定时任务执行机制
+  - 根据 CRON 表达式自动触发
+  - 支持股票和基金两种类型
+  - 执行结果自动记录到 crawl_runs
+
+**产出物**:
+- `backend/app/tasks/scheduler/scheduler_manager.py` - 调度器管理器
+- `backend/app/api/tasks.py` - 完善的任务管理 API
+- `backend/app/main.py` - 集成生命周期管理
+- `tests/test_task_scheduler.py` - 任务管理测试脚本
+
+**验证结果**:
+- ✅ 可以从接口手动触发任务
+- ✅ 到时间会自动触发任务（APScheduler）
+- ✅ 能查看最近任务执行历史
+- ✅ 任务可以启用/停用
+- ✅ 系统启动/关闭时调度器正常工作
+- ✅ 执行日志完整可追踪
+
+**技术要点**:
+- 使用 APScheduler 的 BackgroundScheduler
+- FastAPI lifespan 事件管理生命周期
+- 事件监听器跟踪任务执行状态
+- CRON 表达式灵活配置调度时间
+- 数据库和调度器状态同步
 
 ---
 
