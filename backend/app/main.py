@@ -6,6 +6,8 @@ import logging
 from app.core.config import settings
 from app.api.auth import router as auth_router
 from app.api.tasks import router as tasks_router
+from app.api.query import router as query_router
+from app.api.export import router as export_router
 from app.tasks.scheduler.scheduler_manager import scheduler_manager
 
 logger = logging.getLogger(__name__)
@@ -58,6 +60,8 @@ app.add_middleware(
 # 注册路由
 app.include_router(auth_router)
 app.include_router(tasks_router)
+app.include_router(query_router)
+app.include_router(export_router)
 
 
 @app.get("/api/health")
