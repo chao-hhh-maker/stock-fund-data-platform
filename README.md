@@ -210,8 +210,11 @@ stock-fund-data-platform/
 - ✅ 第一步: 范围确定 (项目边界、MVP功能定义)
 - ✅ 第二步: 工程骨架搭建 (前后端目录结构、依赖安装)
 - ✅ 第三步: 数据库设计 (核心表结构设计、初始化脚本)
+- ✅ 第四步: 后端认证与基础接口 (JWT认证、登录接口、Swagger文档)
 
-**下一步**: 第四步 - 后端认证与基础接口开发
+**下一步**: 第五步 - 数据采集器开发
+
+**详细进度**: 查看 [项目进度文档](docs/progress.md)
 
 ---
 
@@ -250,10 +253,10 @@ cd backend
 source .venv/bin/activate   # Linux/Mac
 
 # 启动后端服务
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
 ```
 
-访问 API 文档: http://localhost:8000/docs
+访问 API 文档: http://localhost:8001/docs
 
 ### 3. 前端环境
 
