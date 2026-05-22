@@ -1,6 +1,6 @@
 # 项目开发进度
 
-## 整体进度: 55% (6/11 步骤完成)
+## 整体进度: 64% (7/11 步骤完成)
 
 ---
 
@@ -299,6 +299,64 @@
 - 事件监听器跟踪任务执行状态
 - CRON 表达式灵活配置调度时间
 - 数据库和调度器状态同步
+
+---
+
+### 第七步: 查询和导出接口
+**完成时间**: 2026-05-22
+**工作量**: 约 8 小时
+
+**完成内容**:
+- [x] 实现查询接口
+  - GET /api/stocks/{code}/daily - 股票日线数据查询
+  - GET /api/funds/{code}/nav - 基金净值数据查询
+  - GET /api/instruments - 金融工具列表查询
+- [x] 分页参数统一为 page 和 page_size
+  - 所有查询接口支持分页
+  - page 从1开始
+  - page_size 最大1000
+- [x] 支持基础筛选
+  - 代码筛选（code）
+  - 日期范围筛选（start_date, end_date）
+  - 类型筛选（type: stock/fund）
+  - 市场筛选（market: SH/SZ/BJ）
+  - 状态筛选（status: active/delisted）
+- [x] 实现导出接口
+  - POST /api/exports - 创建导出任务
+  - GET /api/exports - 获取导出记录列表
+  - GET /api/exports/{export_id}/download - 下载导出文件
+- [x] 导出时落 export_records
+  - 记录发起人（user_id）
+  - 记录查询参数（query_params）
+  - 记录导出结果（record_count, file_size）
+  - 记录文件路径和格式
+  - 记录导出状态和错误信息
+- [x] 支持多种文件格式
+  - CSV（默认）
+  - Excel
+  - Parquet
+
+**产出物**:
+- `backend/app/api/query.py` - 查询 API 接口
+- `backend/app/api/export.py` - 导出 API 接口
+- `backend/app/services/export_service.py` - 导出服务
+- `backend/app/models/export.py` - 导出记录模型
+- `tests/test_query_export.py` - 查询和导出测试脚本
+
+**验证结果**:
+- ✅ 查询接口返回稳定
+- ✅ 前端后续可直接消费
+- ✅ 导出结果可下载
+- ✅ 有完整的导出历史记录
+- ✅ 分页功能正常
+- ✅ 筛选功能正常
+
+**技术要点**:
+- SQLAlchemy ORM 查询优化
+- Pandas 数据处理和导出
+- FastAPI FileResponse 文件下载
+- 统一的响应格式和错误处理
+- 异步导出任务管理
 
 ---
 
