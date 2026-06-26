@@ -1,7 +1,23 @@
 # 后端接口文档（backend_api.md）
 
-> 模块 2 交付物 · RESTful API 设计（OpenAPI 3.0）
-> 运行后端后可访问 `http://127.0.0.1:8000/docs` 查看在线 Swagger。
+> **项目名称**：股票基金数据获取和管理平台  
+> **课程模块**：模块 2：AI 辅助设计  
+> **文档定位**：RESTful API 设计与 OpenAPI 3.0 片段  
+> **最终报告映射**：最终报告第 3 章 3.5 节  
+> **代码依据**：backend/app/api、backend/app/schemas.py、FastAPI Swagger  
+> **整理日期**：2026 年 6 月
+
+## 0. 文档说明
+
+本文档为课程设计过程文档的整理版，用于提交到 GitHub/Gitee 仓库。它与最终课程设计报告保持一致：仓库中保留本文件作为平时过程材料，最终报告中已将其核心内容合并到对应章节。
+
+| 项目 | 内容 |
+| --- | --- |
+| 文档状态 | 最终整理版 |
+| 是否合并进最终报告 | 是 |
+| 后续需补充 | 团队真实姓名、学号、仓库地址、必要截图 |
+
+---
 
 ## 1. 通用约定
 
@@ -89,7 +105,7 @@ components:
       properties:
         access_token: { type: string }
         token_type: { type: string, example: bearer }
-        role: { type: string, enum: [admin, viewer] }
+        role: { type: string, enum: [admin, viewer, analyst] }
         username: { type: string }
     StockDailyOut:
       type: object
@@ -173,7 +189,7 @@ paths:
               type: object
               required: [job_type, target_codes]
               properties:
-                job_type: { type: string, enum: [stock_daily, fund_nav] }
+                job_type: { type: string, enum: [stock_daily, fund_nav, announcement] }
                 target_codes: { type: string, example: "600519.SH,000001.SZ" }
       responses:
         '200':
@@ -219,3 +235,22 @@ curl -X POST http://127.0.0.1:8000/api/tasks/crawl \
   -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
   -d '{"job_type":"stock_daily","target_codes":"000001.SZ"}'
 ```
+
+## 接口实现对应关系
+
+| 路由文件 | 负责接口 | 主要能力 |
+| --- | --- | --- |
+| `api/auth.py` | `/auth/login`、`/auth/token`、`/auth/me` | 登录、JWT 签发、当前用户 |
+| `api/data.py` | `/instruments`、`/stocks/{code}/daily`、`/funds/{code}/nav` | 标的、股票行情、基金净值查询 |
+| `api/tasks.py` | `/tasks`、`/tasks/crawl`、`/tasks/crawl-all` | 任务 CRUD、手动采集、运行日志 |
+| `api/exports.py` | `/exports` | 多格式导出、压缩加密、下载隔离 |
+| `api/monitor.py` | `/health`、`/dashboard`、`/monitor/*`、`/metadata/*` | 仪表盘、完整性、告警、数据血缘、审计 |
+| `api/query.py` | `/query/sql` | 受控 SQL 查询 |
+| `api/admin.py` | `/admin/users`、`/admin/roles`、`/admin/tenants` | 用户、角色、租户管理 |
+| `api/ws.py` | `/ws/quotes` | WebSocket 实时行情推送 |
+
+## 提交前核对
+
+- [ ] 后端启动后 Swagger 能正常访问：`http://127.0.0.1:8000/docs`。
+- [ ] 文档中的路径、方法、权限与 Swagger 一致。
+- [ ] 管理员接口、登录接口、公开接口边界清晰。

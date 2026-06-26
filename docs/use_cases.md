@@ -1,6 +1,23 @@
 # 交互场景文档（use_cases.md）
 
-> 模块 1 交付物 · 为关键用户故事书写交互场景（用例）
+> **项目名称**：股票基金数据获取和管理平台  
+> **课程模块**：模块 1：项目启动与 AI 辅助需求分析  
+> **文档定位**：关键用户故事的交互场景 / 用例  
+> **最终报告映射**：最终报告第 2 章 2.3 节  
+> **代码依据**：frontend/src/views、backend/app/api、backend/app/services  
+> **整理日期**：2026 年 6 月
+
+## 0. 文档说明
+
+本文档为课程设计过程文档的整理版，用于提交到 GitHub/Gitee 仓库。它与最终课程设计报告保持一致：仓库中保留本文件作为平时过程材料，最终报告中已将其核心内容合并到对应章节。
+
+| 项目 | 内容 |
+| --- | --- |
+| 文档状态 | 最终整理版 |
+| 是否合并进最终报告 | 是 |
+| 后续需补充 | 团队真实姓名、学号、仓库地址、必要截图 |
+
+---
 
 约定：主路径为正常流程，扩展为异常 / 替代流程。接口前缀统一 `/api`。
 
@@ -89,3 +106,20 @@
   2. 后端聚合标的数、数据行数、最近 5 条运行与导出记录。
   3. 前端以统计卡片 + 表格展示。
   4. 健康检查 GET `/api/health`（公开）返回 DB 与调度器状态。
+
+## 用例到测试的追踪关系
+
+| 用例 | 自动化测试 / 手工验证 | 说明 |
+| --- | --- | --- |
+| UC-01 用户登录 | `test_login_success_and_failure`、`test_me_requires_token` | 覆盖成功、失败、无 token 三类分支 |
+| UC-02 手动采集 | `test_admin_quick_crawl_and_runs`、`test_viewer_cannot_trigger_crawl` | 覆盖管理员成功与普通用户 403 |
+| UC-03 定时采集 | `test_job_lifecycle_and_logs`、任务页手工验证 | 覆盖任务创建、执行与日志 |
+| UC-04 行情查询 | `test_stock_daily_query_paginated`、`test_fund_nav_query` | 覆盖分页和净值查询 |
+| UC-05 导出下载 | `test_export_csv_and_download`、`test_encrypted_export` | 覆盖 CSV、压缩/加密、下载 |
+| UC-06 监控健康 | `test_health_public`、`test_metrics_endpoint`、`test_integrity_endpoint` | 覆盖健康、完整性、指标 |
+
+## 提交前核对
+
+- [ ] 每个主路径都能对应到前端菜单或 Swagger 接口。
+- [ ] 每个异常路径至少有一种测试或手工验证方式。
+- [ ] 权限失败、数据源失败、无数据三类情况均已写入扩展流程。
