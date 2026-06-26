@@ -1,49 +1,50 @@
+"""安全工具：密码哈希与 JWT 令牌。
+
+为避免对 bcrypt 原生库的强依赖（Windows 上偶有安装问题），
+密码哈希使用 passlib 的 pbkdf2_sha256（纯 Python，稳定可移植）。
 """
-安全认证模块
-包含密码哈希和JWT token生成/验证
-"""
-from datetime import datetime, timedelta
-from typing import Optional
+
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional
+
 from jose import JWTError, jwt
-import bcrypt
-from .config import settings
+from passlib.context import CryptContext
+
+from app.core.config import settings
+
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """验证密码"""
+def hash_password(password: str) -> str:
+    """生成密码哈希。"""
+    return pwd_context.hash(password)
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    """校验明文密码与哈希是否匹配。"""
     try:
-        return bcrypt.checkpw(
-            plain_password.encode('utf-8'),
-            hashed_password.encode('utf-8')
-        )
-    except Exception:
+        return pwd_context.verify(plain, hashed)
+    except ValueError:
         return False
 
 
-def get_password_hash(password: str) -> str:
-    """生成密码哈希"""
-    salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
-    return hashed.decode('utf-8')
+def create_access_token(subject: str, role: str, expires_minutes: Optional[int] = None) -> str:
+    """签发 JWT 访问令牌。
+
+    subject 为用户名，role 写入 payload，便于无需查库即可做粗粒度鉴权。
+    """
+    expire = datetime.now(timezone.utc) + timedelta(
+        minutes=expires_minutes or settings.ACCESS_TOKEN_EXPIRE_MINUTES
+    )
+    payload: dict[str, Any] = {"sub": subject, "role": role, "exp": expire}
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """创建JWT访问令牌"""
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-    return encoded_jwt
-
-
-def decode_access_token(token: str) -> Optional[dict]:
-    """解码JWT访问令牌"""
+def decode_access_token(token: str) -> Optional[dict[str, Any]]:
+    """解析并校验 JWT，失败返回 None。"""
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        return payload
+        return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     except JWTError:
         return None

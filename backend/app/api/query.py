@@ -1,237 +1,122 @@
+﻿"""受控 SQL 查询路由（模块4：通用 SQL 查询接口）。
+
+安全设计：
+- 仅管理员可用。
+- 只允许单条 SELECT 语句；禁止分号多语句、DML/DDL 关键字。
+- 表名白名单，强制注入 LIMIT，防止全表扫描 / 数据泄露。
+- 复用受控的只读会话执行。
 """
-数据查询相关API接口
-"""
-from typing import Optional, List
-from fastapi import APIRouter, Depends, Query
+
+from __future__ import annotations
+
+import re
+import time
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import text
 from sqlalchemy.orm import Session
-from datetime import date
 
+from app.api.deps import require_admin
+from app.core.config import settings
 from app.core.database import get_db
-from app.core.response import Response, ErrorCode
-from app.models.stock_daily import StockDaily
-from app.models.fund_nav import FundNav
-from app.models.instrument import Instrument
+from app.models import User
+from app.schemas import SqlQueryRequest, SqlQueryResult
+from app.services import audit_service
 
-router = APIRouter(prefix="/api", tags=["数据查询"])
+router = APIRouter(prefix="/query", tags=["受控SQL查询"])
+
+# 允许查询的表白名单
+_ALLOWED_TABLES = {
+    "stock_daily", "fund_nav", "instruments", "crawl_jobs", "crawl_runs",
+    "export_records", "announcements", "data_quality_issues", "alert_records",
+}
+# 禁止的关键字（DML/DDL/危险函数）
+_FORBIDDEN = re.compile(
+    r"\b(insert|update|delete|drop|alter|create|truncate|replace|grant|"
+    r"revoke|attach|detach|pragma|vacuum|reindex)\b",
+    re.IGNORECASE,
+)
 
 
-@router.get("/stocks/{code}/daily", response_model=Response, summary="查询股票日线数据")
-def get_stock_daily(
-    code: str,
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=1000, description="每页数量"),
-    start_date: Optional[date] = Query(None, description="开始日期"),
-    end_date: Optional[date] = Query(None, description="结束日期"),
-    db: Session = Depends(get_db)
-):
-    """
-    查询指定股票的日线数据
-    
-    - **code**: 股票代码（6位）
-    - **page**: 页码，从1开始
-    - **page_size**: 每页数量，最大1000
-    - **start_date**: 开始日期（可选）
-    - **end_date**: 结束日期（可选）
-    """
+def _validate_sql(sql: str) -> str:
+    """校验并规范化 SQL，返回安全的可执行语句，非法则抛 400。"""
+    s = sql.strip().rstrip(";").strip()
+    if not s:
+        raise HTTPException(status_code=400, detail="SQL 不能为空")
+    # 禁止多语句
+    if ";" in s:
+        raise HTTPException(status_code=400, detail="只允许执行单条 SQL 语句")
+    # 必须是 SELECT 或 WITH
+    if not re.match(r"^(select|with)\b", s, re.IGNORECASE):
+        raise HTTPException(status_code=400, detail="只允许 SELECT 查询语句")
+    # 禁止 DML/DDL
+    if _FORBIDDEN.search(s):
+        raise HTTPException(status_code=400, detail="检测到非法关键字，仅允许只读查询")
+    # 表名白名单校验：抓取 from / join 后的标识符
+    referenced = set(re.findall(r"\b(?:from|join)\s+([a-zA-Z_][a-zA-Z0-9_]*)", s, re.IGNORECASE))
+    illegal = referenced - _ALLOWED_TABLES
+    if illegal:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不允许访问的表：{', '.join(sorted(illegal))}；可查询：{', '.join(sorted(_ALLOWED_TABLES))}",
+        )
+    return s
+
+
+
+def _strip_user_limit(sql: str) -> str:
+    """移除尾部 LIMIT，由接口 limit 参数统一控制。复杂 LIMIT 写法直接拒绝。"""
+    if re.search(r"\blimit\b", sql, re.IGNORECASE) is None:
+        return sql
+    stripped = re.sub(
+        r"\s+limit\s+\d+\s*(?:offset\s+\d+)?\s*$",
+        "",
+        sql,
+        flags=re.IGNORECASE,
+    )
+    stripped = re.sub(
+        r"\s+limit\s+\d+\s*,\s*\d+\s*$",
+        "",
+        stripped,
+        flags=re.IGNORECASE,
+    )
+    if re.search(r"\blimit\b", stripped, re.IGNORECASE):
+        raise HTTPException(status_code=400, detail="LIMIT 请使用接口 limit 参数，不支持嵌套或复杂 LIMIT 写法")
+    return stripped.strip()
+
+@router.post("/sql", response_model=SqlQueryResult, summary="受控 SQL 查询（管理员，只读）")
+def run_sql(
+    payload: SqlQueryRequest,
+    db: Session = Depends(get_db),
+    current: User = Depends(require_admin),
+) -> SqlQueryResult:
+    safe_sql = _validate_sql(payload.sql)
+    max_rows = min(payload.limit, settings.SQL_QUERY_MAX_ROWS)
+    bounded_sql = _strip_user_limit(safe_sql)
+    # 统一在外层强制 LIMIT，用户 SQL 的尾部 LIMIT 会被接口参数替代。
+    exec_sql = f"SELECT * FROM ({bounded_sql}) AS _q LIMIT {max_rows + 1}"
+
+    start = time.perf_counter()
     try:
-        # 构建查询
-        query = db.query(StockDaily).filter(StockDaily.code == code)
-        
-        # 日期筛选
-        if start_date:
-            query = query.filter(StockDaily.trade_date >= start_date)
-        if end_date:
-            query = query.filter(StockDaily.trade_date <= end_date)
-        
-        # 按日期降序排列
-        query = query.order_by(StockDaily.trade_date.desc())
-        
-        # 查询总数
-        total = query.count()
-        
-        # 分页
-        offset = (page - 1) * page_size
-        items = query.offset(offset).limit(page_size).all()
-        
-        # 转换为字典列表
-        data_list = []
-        for item in items:
-            data_list.append({
-                "id": item.id,
-                "code": item.code,
-                "trade_date": item.trade_date.isoformat() if item.trade_date else None,
-                "open": float(item.open) if item.open else None,
-                "high": float(item.high) if item.high else None,
-                "low": float(item.low) if item.low else None,
-                "close": float(item.close) if item.close else None,
-                "volume": item.volume,
-                "amount": float(item.amount) if item.amount else None,
-                "change_pct": float(item.change_pct) if item.change_pct else None,
-                "turnover_rate": float(item.turnover_rate) if item.turnover_rate else None,
-                "data_source": item.data_source
-            })
-        
-        return Response(
-            code=ErrorCode.SUCCESS,
-            message="查询成功",
-            data={
-                "total": total,
-                "page": page,
-                "page_size": page_size,
-                "items": data_list
-            }
-        )
-        
-    except Exception as e:
-        return Response(
-            code=ErrorCode.INTERNAL_ERROR,
-            message=f"查询失败: {str(e)}",
-            data=None
-        )
+        result = db.execute(text(exec_sql))
+        columns = list(result.keys())
+        fetched = result.fetchmany(max_rows + 1)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"SQL 执行错误：{exc}")
+    elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
 
+    truncated = len(fetched) > max_rows
+    rows = [dict(zip(columns, r)) for r in fetched[:max_rows]]
 
-@router.get("/funds/{code}/nav", response_model=Response, summary="查询基金净值数据")
-def get_fund_nav(
-    code: str,
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=1000, description="每页数量"),
-    start_date: Optional[date] = Query(None, description="开始日期"),
-    end_date: Optional[date] = Query(None, description="结束日期"),
-    db: Session = Depends(get_db)
-):
-    """
-    查询指定基金的净值数据
-    
-    - **code**: 基金代码（6位）
-    - **page**: 页码，从1开始
-    - **page_size**: 每页数量，最大1000
-    - **start_date**: 开始日期（可选）
-    - **end_date**: 结束日期（可选）
-    """
-    try:
-        # 构建查询
-        query = db.query(FundNav).filter(FundNav.code == code)
-        
-        # 日期筛选
-        if start_date:
-            query = query.filter(FundNav.nav_date >= start_date)
-        if end_date:
-            query = query.filter(FundNav.nav_date <= end_date)
-        
-        # 按日期降序排列
-        query = query.order_by(FundNav.nav_date.desc())
-        
-        # 查询总数
-        total = query.count()
-        
-        # 分页
-        offset = (page - 1) * page_size
-        items = query.offset(offset).limit(page_size).all()
-        
-        # 转换为字典列表
-        data_list = []
-        for item in items:
-            data_list.append({
-                "id": item.id,
-                "code": item.code,
-                "nav_date": item.nav_date.isoformat() if item.nav_date else None,
-                "unit_nav": float(item.unit_nav) if item.unit_nav else None,
-                "accumulated_nav": float(item.accumulated_nav) if item.accumulated_nav else None,
-                "daily_growth": float(item.daily_growth) if item.daily_growth else None,
-                "data_source": item.data_source
-            })
-        
-        return Response(
-            code=ErrorCode.SUCCESS,
-            message="查询成功",
-            data={
-                "total": total,
-                "page": page,
-                "page_size": page_size,
-                "items": data_list
-            }
-        )
-        
-    except Exception as e:
-        return Response(
-            code=ErrorCode.INTERNAL_ERROR,
-            message=f"查询失败: {str(e)}",
-            data=None
-        )
+    audit_service.log_action(
+        db, username=current.username, role=current.role.name, action="sql_query",
+        target="query/sql", detail=f"rows={len(rows)};sql={safe_sql[:120]}",
+    )
+    return SqlQueryResult(
+        columns=columns,
+        rows=rows,
+        row_count=len(rows),
+        truncated=truncated,
+        elapsed_ms=elapsed_ms,
+    )
 
-
-@router.get("/instruments", response_model=Response, summary="查询金融工具列表")
-def get_instruments(
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=1000, description="每页数量"),
-    type: Optional[str] = Query(None, description="类型: stock 或 fund"),
-    market: Optional[str] = Query(None, description="市场: SH, SZ, BJ"),
-    status: Optional[str] = Query("active", description="状态: active 或 delisted"),
-    db: Session = Depends(get_db)
-):
-    """
-    查询金融工具（股票/基金）列表
-    
-    - **page**: 页码，从1开始
-    - **page_size**: 每页数量，最大1000
-    - **type**: 类型筛选（stock/fund）
-    - **market**: 市场筛选（SH/SZ/BJ）
-    - **status**: 状态筛选（active/delisted）
-    """
-    try:
-        # 构建查询
-        query = db.query(Instrument)
-        
-        # 类型筛选
-        if type:
-            query = query.filter(Instrument.type == type)
-        
-        # 市场筛选
-        if market:
-            query = query.filter(Instrument.market == market)
-        
-        # 状态筛选
-        if status:
-            query = query.filter(Instrument.status == status)
-        
-        # 按ID降序排列
-        query = query.order_by(Instrument.id.desc())
-        
-        # 查询总数
-        total = query.count()
-        
-        # 分页
-        offset = (page - 1) * page_size
-        items = query.offset(offset).limit(page_size).all()
-        
-        # 转换为字典列表
-        data_list = []
-        for item in items:
-            data_list.append({
-                "id": item.id,
-                "code": item.code,
-                "name": item.name,
-                "type": item.type,
-                "market": item.market,
-                "industry": item.industry,
-                "list_date": item.list_date.isoformat() if item.list_date else None,
-                "status": item.status
-            })
-        
-        return Response(
-            code=ErrorCode.SUCCESS,
-            message="查询成功",
-            data={
-                "total": total,
-                "page": page,
-                "page_size": page_size,
-                "items": data_list
-            }
-        )
-        
-    except Exception as e:
-        return Response(
-            code=ErrorCode.INTERNAL_ERROR,
-            message=f"查询失败: {str(e)}",
-            data=None
-        )

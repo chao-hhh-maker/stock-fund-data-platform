@@ -1,137 +1,78 @@
-"""
-认证相关API接口
-"""
-from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+﻿"""认证路由：登录、获取当前用户。"""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from jose import jwt
 
-from app.core.database import get_db
+from app.api.deps import get_current_user
 from app.core.config import settings
-from app.core.security import verify_password, create_access_token, decode_access_token
-from app.core.response import Response, ErrorResponse, ErrorCode
-from app.models.user import User
-from app.models.role import Role
-from app.schemas.auth import LoginRequest, TokenResponse, UserInfo
+from app.core.database import get_db
+from app.core.security import create_access_token
+from app.models import User
+from app.schemas import LoginRequest, Token, UserOut
+from app.services import audit_service, user_service
 
-router = APIRouter(prefix="/api/auth", tags=["认证"])
-
-# OAuth2密码流
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+router = APIRouter(prefix="/auth", tags=["认证"])
 
 
-def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
-) -> User:
-    """获取当前登录用户(依赖注入)"""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="无效的认证凭证",
-        headers={"WWW-Authenticate": "Bearer"},
+def _issue_token(user: User) -> Token:
+    token = create_access_token(subject=user.username, role=user.role.name)
+    return Token(
+        access_token=token,
+        role=user.role.name,
+        username=user.username,
+        data_scope=user.role.data_scope,
+        max_history_days=user.role.max_history_days,
+        can_export=user.role.can_export,
+        can_view_sensitive=user.role.can_view_sensitive,
     )
 
-    try:
-        payload = decode_access_token(token)
-        if payload is None:
-            raise credentials_exception
 
-        user_id: int = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-    except Exception:
-        raise credentials_exception
-
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is None:
-        raise credentials_exception
-
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="用户账户已被禁用"
-        )
-
-    return user
-
-
-@router.post("/login", response_model=Response[TokenResponse], summary="用户登录")
-def login(login_data: LoginRequest, db: Session = Depends(get_db)):
-    """
-    用户登录接口
-
-    - **username**: 用户名
-    - **password**: 密码
-
-    返回JWT访问令牌
-    """
-    # 查询用户
-    user = db.query(User).filter(User.username == login_data.username).first()
-
-    # 验证用户是否存在
+@router.post("/login", response_model=Token, summary="用户名密码登录")
+def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)) -> Token:
+    user = user_service.authenticate(db, payload.username, payload.password)
     if not user:
-        return Response(
-            code=ErrorCode.UNAUTHORIZED,
-            message="用户名或密码错误",
-            data=None
+        audit_service.log_action(
+            db, username=payload.username, action="login_failed",
+            detail="用户名或密码错误", ip=request.client.host if request.client else "",
         )
-
-    # 验证密码
-    if not verify_password(login_data.password, user.password_hash):
-        return Response(
-            code=ErrorCode.UNAUTHORIZED,
-            message="用户名或密码错误",
-            data=None
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误"
         )
+    audit_service.log_action(
+        db, username=user.username, role=user.role.name, action="login",
+        ip=request.client.host if request.client else "",
+    )
+    return _issue_token(user)
 
-    # 检查用户是否激活
-    if not user.is_active:
-        return Response(
-            code=ErrorCode.FORBIDDEN,
-            message="用户账户已被禁用",
-            data=None
+
+@router.post("/token", response_model=Token, summary="OAuth2 表单登录（供 Swagger 授权）")
+def login_oauth(
+    form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
+) -> Token:
+    user = user_service.authenticate(db, form.username, form.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误"
         )
+    return _issue_token(user)
 
-    # 创建访问令牌
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.id},
-        expires_delta=access_token_expires
+
+@router.get("/me", response_model=UserOut, summary="获取当前登录用户")
+def me(current: User = Depends(get_current_user)) -> UserOut:
+    return UserOut(
+        id=current.id,
+        username=current.username,
+        full_name=current.full_name,
+        role=current.role.name,
+        is_active=current.is_active,
+        data_scope=current.role.data_scope,
+        max_history_days=current.role.max_history_days,
+        can_export=current.role.can_export,
+        can_view_sensitive=current.role.can_view_sensitive,
+        tenant_id=current.tenant_id,
+        department=current.department,
     )
 
-    # 返回token
-    token_response = TokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
-    )
-
-    return Response(
-        code=ErrorCode.SUCCESS,
-        message="登录成功",
-        data=token_response
-    )
-
-
-@router.get("/me", response_model=Response[UserInfo], summary="获取当前用户信息")
-def get_me(current_user: User = Depends(get_current_user)):
-    """
-    获取当前登录用户的详细信息
-
-    需要在请求头中携带有效的Bearer Token:
-    Authorization: Bearer <token>
-    """
-    user_info = UserInfo(
-        id=current_user.id,
-        username=current_user.username,
-        email=current_user.email,
-        role_name=current_user.role.role_name if current_user.role else None,
-        is_active=current_user.is_active
-    )
-
-    return Response(
-        code=ErrorCode.SUCCESS,
-        message="获取用户信息成功",
-        data=user_info
-    )
