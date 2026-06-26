@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# 项目特定：生成产物
+*.db
+backend/data/
+data/exports/
+backend/.env
+frontend/node_modules/
+frontend/dist/
+docs/_guide_extracted.txt
+frontend/.npm-cache/
