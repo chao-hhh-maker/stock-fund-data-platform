@@ -1,0 +1,22 @@
+# 后端依赖（课程设计题目二）
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+sqlalchemy==2.0.39
+pydantic==2.10.3
+pydantic-settings==2.6.1
+python-jose[cryptography]==3.3.0
+passlib==1.7.4
+python-multipart==0.0.20
+pandas==2.2.3
+openpyxl==3.1.5
+apscheduler==3.11.0
+# 导出 AES 加密（可选；未安装时自动回退标准 zip 加密）
+pyzipper>=0.3.6
+# 数据源（可选；无网络时自动回退样例数据）
+akshare>=1.16.0
+requests>=2.31.0  # 备用股票数据源（腾讯财经）直接调用
+# MySQL 驱动（使用 MySQL 时需要；默认 SQLite 可不装）
+pymysql==1.1.1
+# 测试
+pytest==8.3.4
+httpx==0.28.1
